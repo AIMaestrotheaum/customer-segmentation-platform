@@ -1,0 +1,3 @@
+Cluster,Segment_Name,Customers,Percentage,Primary_Driver,Secondary_Driver,Third_Driver,Fourth_Driver,Fifth_Driver
+0,Mainstream Customers,980233,98.02,Average_Order_Value,Support_Interaction_Rate,InStore_Purchase_Ratio,Online_Purchase_Ratio,Frequency
+1,Support-Intensive Customers,19767,1.98,Average_Order_Value,InStore_Purchase_Ratio,Online_Purchase_Ratio,Support_Interaction_Rate,Frequency
