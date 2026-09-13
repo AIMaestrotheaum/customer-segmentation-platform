@@ -2,6 +2,8 @@ import streamlit as st
 import requests
 import pandas as pd
 import numpy as np
+import os
+import requests
 
 from pathlib import Path
 
@@ -47,7 +49,10 @@ CUSTOMER_CLUSTERS_FILE = (
 # FASTAPI
 # ============================================================
 
-API_URL = "http://backend:8000/predict"
+API_URL = os.getenv(
+    "API_URL",
+    "http://backend:8000/predict"
+)
 # ============================================================
 # MODEL FEATURES
 # ============================================================
