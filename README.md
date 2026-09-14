@@ -359,36 +359,6 @@ Built as an end-to-end machine learning and data engineering portfolio project.
 
 ````
 
-Save it.
 
-### Step 2 — Check Git
-
-```powershell
-git status
-````
-
-Then:
-
-```powershell
-git add README.md
-git commit -m "Improve project documentation"
-git push origin main
-```
-
-### Step 3 — Final verification
-
-Run:
-
-```powershell
-git status
-```
-
-You want:
-
-```text
-nothing to commit, working tree clean
-```
-
-Then your project has the important pieces in place:
 
 **ML → API → Streamlit → Docker → GitHub → Render**
