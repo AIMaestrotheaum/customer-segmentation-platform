@@ -1,14 +1,4 @@
-Next, finish the project presentation layer. The application is deployed; now make the GitHub repository look like a real portfolio project.
 
-### Step 1 — Create/update `README.md`
-
-From your project root:
-
-```powershell
-notepad README.md
-```
-
-Replace its contents with:
 
 ````markdown
 # 📊 Intelligent Customer Segmentation & Behavioral Analytics Platform
@@ -402,5 +392,3 @@ nothing to commit, working tree clean
 Then your project has the important pieces in place:
 
 **ML → API → Streamlit → Docker → GitHub → Render**
-
-The next worthwhile step is **not more deployment tweaking**. It's preparing the project for interviews: explaining the clustering logic, why K-Means was chosen, why `K=2`, the silhouette score/inertia, and the business meaning of the two segments.
