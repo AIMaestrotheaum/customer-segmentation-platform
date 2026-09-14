@@ -1,14 +1,10 @@
-import streamlit as st
-import requests
-import pandas as pd
-import numpy as np
 import os
-import requests
-
 from pathlib import Path
 
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
+import numpy as np
+import pandas as pd
+import requests
+import streamlit as st
 
 
 # ============================================================
@@ -30,7 +26,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 OUTPUT_DIR = BASE_DIR / "outputs"
 
-PROFILE_FILE = OUTPUT_DIR / "cluster_profile.csv"
+
+PROFILE_FILE = (
+    OUTPUT_DIR / "cluster_profile.csv"
+)
 
 BUSINESS_PROFILE_FILE = (
     OUTPUT_DIR / "cluster_business_profiles.csv"
@@ -40,8 +39,8 @@ RECOMMENDATIONS_FILE = (
     OUTPUT_DIR / "cluster_recommendations.csv"
 )
 
-CUSTOMER_CLUSTERS_FILE = (
-    OUTPUT_DIR / "customer_clusters.csv"
+PCA_SAMPLE_FILE = (
+    OUTPUT_DIR / "pca_sample.csv"
 )
 
 
@@ -52,7 +51,15 @@ CUSTOMER_CLUSTERS_FILE = (
 API_URL = os.getenv(
     "API_URL",
     "http://backend:8000/predict"
-)
+).strip().rstrip("/")
+
+
+# If Render environment variable contains only the backend
+# base URL, automatically add /predict.
+if not API_URL.endswith("/predict"):
+    API_URL = f"{API_URL}/predict"
+
+
 # ============================================================
 # MODEL FEATURES
 # ============================================================
@@ -108,9 +115,11 @@ def load_business_profiles():
 
     try:
 
-        return pd.read_csv(
+        df = pd.read_csv(
             BUSINESS_PROFILE_FILE
         )
+
+        return df
 
     except Exception:
 
@@ -129,9 +138,11 @@ def load_recommendations():
 
     try:
 
-        return pd.read_csv(
+        df = pd.read_csv(
             RECOMMENDATIONS_FILE
         )
+
+        return df
 
     except Exception:
 
@@ -139,19 +150,19 @@ def load_recommendations():
 
 
 # ============================================================
-# LOAD CUSTOMER CLUSTERS
+# LOAD PCA SAMPLE
 # ============================================================
 
 @st.cache_data
-def load_customer_clusters():
+def load_pca_sample():
 
-    if not CUSTOMER_CLUSTERS_FILE.exists():
+    if not PCA_SAMPLE_FILE.exists():
         return None
 
     try:
 
         df = pd.read_csv(
-            CUSTOMER_CLUSTERS_FILE
+            PCA_SAMPLE_FILE
         )
 
         return df
@@ -199,9 +210,7 @@ page = st.sidebar.radio(
 
 
 # ============================================================
-# ============================================================
 # CUSTOMER PREDICTION
-# ============================================================
 # ============================================================
 
 if page == "🔮 Customer Prediction":
@@ -377,6 +386,10 @@ if page == "🔮 Customer Prediction":
             )
 
 
+            # =================================================
+            # SUCCESS
+            # =================================================
+
             if response.status_code == 200:
 
                 result = response.json()
@@ -387,6 +400,7 @@ if page == "🔮 Customer Prediction":
 
                 st.divider()
 
+
                 result_col1, result_col2 = (
                     st.columns(2)
                 )
@@ -396,7 +410,10 @@ if page == "🔮 Customer Prediction":
 
                     st.metric(
                         "Cluster",
-                        result["cluster"]
+                        result.get(
+                            "cluster",
+                            "N/A"
+                        )
                     )
 
 
@@ -404,7 +421,10 @@ if page == "🔮 Customer Prediction":
 
                     st.metric(
                         "Customer Segment",
-                        result["segment"]
+                        result.get(
+                            "segment",
+                            "N/A"
+                        )
                     )
 
 
@@ -413,9 +433,16 @@ if page == "🔮 Customer Prediction":
                 )
 
                 st.info(
-                    result["recommendation"]
+                    result.get(
+                        "recommendation",
+                        "No recommendation available."
+                    )
                 )
 
+
+            # =================================================
+            # VALIDATION ERROR
+            # =================================================
 
             elif response.status_code == 422:
 
@@ -423,10 +450,22 @@ if page == "🔮 Customer Prediction":
                     "Invalid customer input."
                 )
 
-                st.json(
-                    response.json()
-                )
+                try:
 
+                    st.json(
+                        response.json()
+                    )
+
+                except Exception:
+
+                    st.write(
+                        response.text
+                    )
+
+
+            # =================================================
+            # OTHER API ERROR
+            # =================================================
 
             else:
 
@@ -434,10 +473,22 @@ if page == "🔮 Customer Prediction":
                     f"API Error: {response.status_code}"
                 )
 
-                st.json(
-                    response.json()
-                )
+                try:
 
+                    st.json(
+                        response.json()
+                    )
+
+                except Exception:
+
+                    st.write(
+                        response.text
+                    )
+
+
+        # =====================================================
+        # CONNECTION ERROR
+        # =====================================================
 
         except requests.exceptions.ConnectionError:
 
@@ -445,10 +496,18 @@ if page == "🔮 Customer Prediction":
                 "Cannot connect to FastAPI."
             )
 
-            st.code(
-                "uvicorn backend.app:app --reload"
+            st.write(
+                "FastAPI endpoint:"
             )
 
+            st.code(
+                API_URL
+            )
+
+
+        # =====================================================
+        # TIMEOUT
+        # =====================================================
 
         except requests.exceptions.Timeout:
 
@@ -456,6 +515,14 @@ if page == "🔮 Customer Prediction":
                 "The API request timed out."
             )
 
+            st.code(
+                API_URL
+            )
+
+
+        # =====================================================
+        # GENERAL ERROR
+        # =====================================================
 
         except Exception as e:
 
@@ -465,9 +532,7 @@ if page == "🔮 Customer Prediction":
 
 
 # ============================================================
-# ============================================================
 # SEGMENTATION ANALYTICS
-# ============================================================
 # ============================================================
 
 else:
@@ -606,31 +671,40 @@ else:
 
 
     available_features = [
-        x for x in comparison_features
-        if x in cluster_profile.columns
+        feature
+        for feature in comparison_features
+        if feature in cluster_profile.columns
     ]
 
 
-    selected_feature = st.selectbox(
-        "Select feature",
-        available_features
-    )
+    if available_features:
+
+        selected_feature = st.selectbox(
+            "Select feature",
+            available_features
+        )
 
 
-    feature_chart = cluster_profile[
-        [selected_feature]
-    ].copy()
+        feature_chart = cluster_profile[
+            [selected_feature]
+        ].copy()
 
 
-    feature_chart.index = [
-        f"Cluster {x}"
-        for x in feature_chart.index
-    ]
+        feature_chart.index = [
+            f"Cluster {x}"
+            for x in feature_chart.index
+        ]
 
 
-    st.bar_chart(
-        feature_chart
-    )
+        st.bar_chart(
+            feature_chart
+        )
+
+    else:
+
+        st.warning(
+            "No behavioral comparison features are available."
+        )
 
 
     # ========================================================
@@ -642,20 +716,6 @@ else:
     )
 
 
-    metric_features = [
-        "Monetary_Value",
-        "Average_Order_Value",
-        "Frequency",
-        "Engagement_Score"
-    ]
-
-
-    metric_features = [
-        x for x in metric_features
-        if x in cluster_profile.columns
-    ]
-
-
     metric_col1, metric_col2 = st.columns(2)
 
 
@@ -665,22 +725,38 @@ else:
             "**Monetary Value by Cluster**"
         )
 
-        st.bar_chart(
-            cluster_profile[
-                ["Monetary_Value"]
-            ]
-        )
+        if "Monetary_Value" in cluster_profile.columns:
+
+            st.bar_chart(
+                cluster_profile[
+                    ["Monetary_Value"]
+                ]
+            )
+
+        else:
+
+            st.warning(
+                "Monetary_Value is unavailable."
+            )
 
 
         st.write(
             "**Frequency by Cluster**"
         )
 
-        st.bar_chart(
-            cluster_profile[
-                ["Frequency"]
-            ]
-        )
+        if "Frequency" in cluster_profile.columns:
+
+            st.bar_chart(
+                cluster_profile[
+                    ["Frequency"]
+                ]
+            )
+
+        else:
+
+            st.warning(
+                "Frequency is unavailable."
+            )
 
 
     with metric_col2:
@@ -689,22 +765,38 @@ else:
             "**Average Order Value by Cluster**"
         )
 
-        st.bar_chart(
-            cluster_profile[
-                ["Average_Order_Value"]
-            ]
-        )
+        if "Average_Order_Value" in cluster_profile.columns:
+
+            st.bar_chart(
+                cluster_profile[
+                    ["Average_Order_Value"]
+                ]
+            )
+
+        else:
+
+            st.warning(
+                "Average_Order_Value is unavailable."
+            )
 
 
         st.write(
             "**Engagement Score by Cluster**"
         )
 
-        st.bar_chart(
-            cluster_profile[
-                ["Engagement_Score"]
-            ]
-        )
+        if "Engagement_Score" in cluster_profile.columns:
+
+            st.bar_chart(
+                cluster_profile[
+                    ["Engagement_Score"]
+                ]
+            )
+
+        else:
+
+            st.warning(
+                "Engagement_Score is unavailable."
+            )
 
 
     # ========================================================
@@ -725,11 +817,19 @@ else:
             "**Support Interaction Rate**"
         )
 
-        st.bar_chart(
-            cluster_profile[
-                ["Support_Interaction_Rate"]
-            ]
-        )
+        if "Support_Interaction_Rate" in cluster_profile.columns:
+
+            st.bar_chart(
+                cluster_profile[
+                    ["Support_Interaction_Rate"]
+                ]
+            )
+
+        else:
+
+            st.warning(
+                "Support_Interaction_Rate is unavailable."
+            )
 
 
     with col2:
@@ -738,11 +838,19 @@ else:
             "**Return Rate**"
         )
 
-        st.bar_chart(
-            cluster_profile[
-                ["Return_Rate"]
-            ]
-        )
+        if "Return_Rate" in cluster_profile.columns:
+
+            st.bar_chart(
+                cluster_profile[
+                    ["Return_Rate"]
+                ]
+            )
+
+        else:
+
+            st.warning(
+                "Return_Rate is unavailable."
+            )
 
 
     # ========================================================
@@ -775,6 +883,12 @@ else:
             use_container_width=True
         )
 
+    else:
+
+        st.warning(
+            "cluster_business_profiles.csv could not be loaded."
+        )
+
 
     # ========================================================
     # RECOMMENDATIONS
@@ -787,24 +901,55 @@ else:
         )
 
 
-        for _, row in recommendations.iterrows():
-
-            cluster = row["Cluster"]
-
-            segment = row["Segment_Name"]
-
-            recommendation = row[
-                "Recommendation"
-            ]
+        required_recommendation_columns = [
+            "Cluster",
+            "Segment_Name",
+            "Recommendation"
+        ]
 
 
-            with st.expander(
-                f"Cluster {cluster} — {segment}"
-            ):
+        missing_recommendation_columns = [
+            column
+            for column in required_recommendation_columns
+            if column not in recommendations.columns
+        ]
 
-                st.write(
-                    recommendation
+
+        if missing_recommendation_columns:
+
+            st.error(
+                "Recommendation file is missing columns: "
+                + ", ".join(
+                    missing_recommendation_columns
                 )
+            )
+
+        else:
+
+            for _, row in recommendations.iterrows():
+
+                cluster = row["Cluster"]
+
+                segment = row["Segment_Name"]
+
+                recommendation = row[
+                    "Recommendation"
+                ]
+
+
+                with st.expander(
+                    f"Cluster {cluster} — {segment}"
+                ):
+
+                    st.write(
+                        recommendation
+                    )
+
+    else:
+
+        st.warning(
+            "cluster_recommendations.csv could not be loaded."
+        )
 
 
     # ========================================================
@@ -815,6 +960,7 @@ else:
         "8️⃣ PCA Cluster Visualization"
     )
 
+
     st.write(
         "A 2-dimensional representation of the "
         "11 clustering features. A 10,000-customer "
@@ -822,133 +968,129 @@ else:
     )
 
 
-    # Load customer-level cluster data only when needed
-    customer_data = load_customer_clusters()
+    # ========================================================
+    # LOAD PRECOMPUTED PCA SAMPLE
+    # ========================================================
+
+    pca_data = load_pca_sample()
 
 
-    if customer_data is None:
+    if pca_data is None:
 
         st.warning(
-            "customer_clusters.csv could not be loaded."
+            "pca_sample.csv could not be loaded."
         )
-
 
     else:
 
-        missing_features = [
-            feature
-            for feature in CLUSTER_FEATURES
-            if feature not in customer_data.columns
+        required_pca_columns = [
+            "customer_id",
+            "PCA1",
+            "PCA2",
+            "Cluster"
         ]
 
 
-        if missing_features:
+        missing_pca_columns = [
+            column
+            for column in required_pca_columns
+            if column not in pca_data.columns
+        ]
+
+
+        if missing_pca_columns:
 
             st.error(
-                "Missing clustering features:"
-            )
-
-            st.write(
-                missing_features
-            )
-
-
-        elif "Cluster" not in customer_data.columns:
-
-            st.error(
-                "Cluster column is missing."
+                "PCA sample is missing required columns: "
+                + ", ".join(
+                    missing_pca_columns
+                )
             )
 
 
         else:
 
             # ================================================
-            # SAMPLE DATA
-            # ================================================
-
-            SAMPLE_SIZE = 10000
-
-            if len(customer_data) > SAMPLE_SIZE:
-
-                pca_data = customer_data.sample(
-                    n=SAMPLE_SIZE,
-                    random_state=42
-                )
-
-            else:
-
-                pca_data = customer_data.copy()
-
-
-            # ================================================
             # NUMERIC CONVERSION
             # ================================================
 
-            X_pca = pca_data[
-                CLUSTER_FEATURES
-            ].apply(
-                pd.to_numeric,
+            pca_data["PCA1"] = pd.to_numeric(
+                pca_data["PCA1"],
+                errors="coerce"
+            )
+
+            pca_data["PCA2"] = pd.to_numeric(
+                pca_data["PCA2"],
                 errors="coerce"
             )
 
 
             # ================================================
-            # HANDLE MISSING VALUES
+            # REMOVE INVALID VALUES
             # ================================================
 
-            X_pca = X_pca.replace(
+            pca_data = pca_data.replace(
                 [np.inf, -np.inf],
                 np.nan
             )
 
 
-            X_pca = X_pca.fillna(
-                X_pca.median()
+            pca_data = pca_data.dropna(
+                subset=[
+                    "PCA1",
+                    "PCA2",
+                    "Cluster"
+                ]
             )
 
 
             # ================================================
-            # STANDARDIZE
+            # CLUSTER AS CATEGORY
             # ================================================
 
-            scaler = StandardScaler()
-
-            X_scaled = scaler.fit_transform(
-                X_pca
+            pca_data["Cluster"] = (
+                pca_data["Cluster"]
+                .astype(str)
             )
 
 
             # ================================================
-            # PCA
+            # PCA SUMMARY
             # ================================================
 
-            pca = PCA(
-                n_components=2,
-                random_state=42
+            pca_col1, pca_col2, pca_col3 = (
+                st.columns(3)
             )
 
 
-            X_pca_2d = pca.fit_transform(
-                X_scaled
+            with pca_col1:
+
+                st.metric(
+                    "PCA Sample Size",
+                    f"{len(pca_data):,}"
+                )
+
+
+            with pca_col2:
+
+                st.metric(
+                    "PCA Dimensions",
+                    "2"
+                )
+
+
+            with pca_col3:
+
+                st.metric(
+                    "Clusters",
+                    pca_data["Cluster"].nunique()
+                )
+
+
+            st.write(
+                "Each point represents one customer "
+                "in the PCA visualization sample."
             )
-
-
-            # ================================================
-            # PCA DATAFRAME
-            # ================================================
-
-            pca_df = pd.DataFrame({
-
-                "PCA_1": X_pca_2d[:, 0],
-
-                "PCA_2": X_pca_2d[:, 1],
-
-                "Cluster":
-                    pca_data[
-                        "Cluster"
-                    ].astype(str).values
-
-            })
 
 
             # ================================================
@@ -956,42 +1098,25 @@ else:
             # ================================================
 
             st.scatter_chart(
-                pca_df,
-                x="PCA_1",
-                y="PCA_2",
+                pca_data,
+                x="PCA1",
+                y="PCA2",
                 color="Cluster"
             )
 
 
             # ================================================
-            # EXPLAINED VARIANCE
+            # PCA DATA TABLE
             # ================================================
 
-            variance_1 = (
-                pca.explained_variance_ratio_[0]
-                * 100
-            )
+            with st.expander(
+                "View PCA Sample Data"
+            ):
 
-            variance_2 = (
-                pca.explained_variance_ratio_[1]
-                * 100
-            )
-
-
-            st.write(
-                f"**PCA 1 explained variance:** "
-                f"{variance_1:.2f}%"
-            )
-
-            st.write(
-                f"**PCA 2 explained variance:** "
-                f"{variance_2:.2f}%"
-            )
-
-            st.write(
-                f"**Combined explained variance:** "
-                f"{variance_1 + variance_2:.2f}%"
-            )
+                st.dataframe(
+                    pca_data,
+                    use_container_width=True
+                )
 
 
     # ========================================================
@@ -1019,6 +1144,7 @@ else:
 # ============================================================
 
 st.divider()
+
 
 st.caption(
     "Customer Segmentation Platform | "

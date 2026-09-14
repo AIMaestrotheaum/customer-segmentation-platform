@@ -87,10 +87,11 @@ data/*.csv
 # Ignore all generated CSV outputs by default
 outputs/*.csv
 
-# Keep small analytics files required by Streamlit deployment
+# Small analytics files required by Streamlit deployment
 !outputs/cluster_profile.csv
 !outputs/cluster_business_profiles.csv
 !outputs/cluster_recommendations.csv
+!outputs/pca_sample.csv
 
 
 # ============================================================
